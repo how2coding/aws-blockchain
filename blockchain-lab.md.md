@@ -1228,6 +1228,34 @@
     tar czf certs.tgz retailer-admin-msp supplier-admin-msp
     aws s3api put-object --bucket $BUCKET_NAME --key certs.tgz --body $HOME/certs.tgz --acl bucket-owner-full-control
 
+### .
+
+    configtxgen -outputCreateChannelTx $HOME/mainchannel.pb -profile TwoOrgChannel -channelID mainchannel -configPath $HOME/
+
+### .
+
+    ls -lt ~/mainchannel.pb
+
+### .
+
+    peer channel create -c mainchannel -f $HOME/mainchannel.pb -o $ORDERER --cafile $HOME/managedblockchain-tls-chain.pem --tls
+
+### .
+
+    peer channel fetch oldest $HOME/mainchannel.block -c mainchannel -o $ORDERER --cafile $HOME/managedblockchain-tls-chain.pem --tls
+
+### .
+
+    peer channel join -b $HOME/mainchannel.block
+
+### .
+
+    peer channel list
+### .
+
+    CORE_PEER_ADDRESS=$PEER2ENDPOINT peer channel join -b $HOME/mainchannel.block
+
+### .
 <!--stackedit_data:
-eyJoaXN0b3J5IjpbLTgzNDk2NTAxMywxMjc3ODA5NDE0XX0=
+eyJoaXN0b3J5IjpbLTEzNDU4MjA4MjgsMTI3NzgwOTQxNF19
 -->
