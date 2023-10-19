@@ -1396,8 +1396,53 @@ Error: endorsement failure during invoke. chaincode result: <nil>
 
 ### .
 
-cdk bootstrap aws://$MEMBER_AWS_ID/$AWS_DEFAULT_REGION
+    cdk bootstrap aws://$MEMBER_AWS_ID/$AWS_DEFAULT_REGION
+
+### .
+
+
+    cd $HOME/environment
+    git clone --depth=1 https://github.com/aws-samples/amb-hf-workshop-supplychain-app
+
+### .
+
+    cd $HOME/environment/amb-hf-workshop-supplychain-app
+    npm ci
+
+### .
+
+    cd $HOME/environment/amb-hf-workshop-supplychain-app
+    npm ci --omit=dev --prefix lib/lambda-layer/nodejs
+
+### .
+
+    cd $HOME/environment/amb-hf-workshop-supplychain-app
+    ./scripts/setupConnectionProfile.sh
+
+### .
+
+    export INTERFACE=$(curl --silent http://169.254.169.254/latest/meta-data/network/interfaces/macs/)
+    export SUBNETID=$(curl --silent http://169.254.169.254/latest/meta-data/network/interfaces/macs/${INTERFACE}/subnet-id)
+    export VPCID=$(curl --silent http://169.254.169.254/latest/meta-data/network/interfaces/macs/${INTERFACE}/vpc-id)
+    export SECURITY_GROUPS=$(curl --silent http://169.254.169.254/latest/meta-data/network/interfaces/macs/${INTERFACE}/security-group-ids)
+    export GROUPID=$(aws ec2 describe-security-groups --group-ids $SECURITY_GROUPS --filter "Name=group-name, Values=HFClientAndEndpoint" --query "SecurityGroups[0].GroupId" --output text)
+    export DEFAULT_GROUP_ID=$(aws ec2 describe-security-groups --filter "Name=group-name, Values=default" --query "SecurityGroups[?VpcId=='"$VPCID"'].GroupId | [0]" --output text)
+
+
+### .
+
+    cd $HOME/environment/amb-hf-workshop-supplychain-app
+    cdk deploy --json --outputs-file deploy-output.json
+
+### .
+
+    cd $HOME/environment/amb-hf-workshop-supplychain-app
+    cat deploy-output.json | jq .
+
+# Store user secrets
+
+
 
 <!--stackedit_data:
-eyJoaXN0b3J5IjpbLTU5MTg1OTk4NSwxMjc3ODA5NDE0XX0=
+eyJoaXN0b3J5IjpbLTM5NjE2NDgzLDEyNzc4MDk0MTRdfQ==
 -->
