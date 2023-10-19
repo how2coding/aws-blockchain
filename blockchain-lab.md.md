@@ -1330,6 +1330,23 @@ Both the **Retailer** and **Supplier** should run the approval command in its Cl
 
     peer lifecycle chaincode approveformyorg -o $ORDERER --channelID mainchannel --name supplychaincc --version 1.0 --sequence 1 --init-required --package-id $SUPPLYCHAIN_CC_PACKAGE_ID --tls --cafile $HOME/managedblockchain-tls-chain.pem
 
+
+To verify that the chaincode has been approved by all members and is ready for its final commit to the channel, run the following command from either member's terminal:
+
+    peer lifecycle chaincode checkcommitreadiness -o $ORDERER --channelID mainchannel --name supplychaincc --version 1.0 --init-required --sequence 1 --tls --cafile $HOME/managedblockchain-tls-chain.pem --output json
+
+### .
+
+
+    peer lifecycle chaincode commit -o $ORDERER --channelID mainchannel --name supplychaincc --version 1.0 --sequence 1 --init-required --tls --cafile $HOME/managedblockchain-tls-chain.pem
+
+### .
+
+peer chaincode invoke -C mainchannel -n supplychaincc --isInit -c '{"Args": ["init"]}' -o $ORDERER --cafile $HOME/managedblockchain-tls-chain.pem --tls --waitForEvent
+
+
+
+
 <!--stackedit_data:
-eyJoaXN0b3J5IjpbNzU5MjgyOTIwLDEyNzc4MDk0MTRdfQ==
+eyJoaXN0b3J5IjpbLTI5MTcwNjMxMCwxMjc3ODA5NDE0XX0=
 -->
