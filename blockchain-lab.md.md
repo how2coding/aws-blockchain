@@ -1342,11 +1342,30 @@ To verify that the chaincode has been approved by all members and is ready for i
 
 ### .
 
-peer chaincode invoke -C mainchannel -n supplychaincc --isInit -c '{"Args": ["init"]}' -o $ORDERER --cafile $HOME/managedblockchain-tls-chain.pem --tls --waitForEvent
+    peer chaincode invoke -C mainchannel -n supplychaincc --isInit -c '{"Args": ["init"]}' -o $ORDERER --cafile $HOME/managedblockchain-tls-chain.pem --tls --waitForEvent
 
+# Supplier steps
 
+    CORE_PEER_MSPCONFIGPATH=$HOME/spworker-msp peer chaincode invoke -C mainchannel -n supplychaincc -c '{"Args": ["createProduct", "TEST1234"]}' -o $ORDERER --cafile $HOME/managedblockchain-tls-chain.pem --tls --waitForEvent
 
+### .
+
+    CORE_PEER_MSPCONFIGPATH=$HOME/spinspector-msp peer chaincode invoke -C mainchannel -n supplychaincc -c '{"Args": ["updateProductState", "TEST1234", "inspect"]}' -o $ORDERER --cafile $HOME/managedblockchain-tls-chain.pem --tls --waitForEvent
+
+### .
+
+    CORE_PEER_MSPCONFIGPATH=$HOME/spworker-msp peer chaincode invoke -C mainchannel -n supplychaincc -c '{"Args": ["updateProductState", "TEST1234", "ship"]}' -o $ORDERER --cafile $HOME/managedblockchain-tls-chain.pem --tls --waitForEvent
+
+### .
+
+After each command, the product status is updated with a timestamp of when each operation was performed. If you see the following error at any time during these steps, try again.
+
+```text
+
+Error: endorsement failure during invoke. chaincode result: <nil>
+```
+### .
 
 <!--stackedit_data:
-eyJoaXN0b3J5IjpbLTI5MTcwNjMxMCwxMjc3ODA5NDE0XX0=
+eyJoaXN0b3J5IjpbLTQxNTM4ODI2MywxMjc3ODA5NDE0XX0=
 -->
