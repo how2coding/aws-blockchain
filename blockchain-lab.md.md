@@ -1256,6 +1256,32 @@
     CORE_PEER_ADDRESS=$PEER2ENDPOINT peer channel join -b $HOME/mainchannel.block
 
 ### .
+
+    peer channel list
+
+# Join main channel
+
+    cd
+    aws s3api get-object --bucket $BUCKET_NAME --key certs.tgz $HOME/certs.tgz
+    tar zxvf certs.tgz
+
+### .
+
+    peer channel fetch oldest $HOME/mainchannel.block -c mainchannel -o $ORDERER --cafile $HOME/managedblockchain-tls-chain.pem --tls
+
+### .
+
+    peer channel join -b $HOME/mainchannel.block
+
+### .
+
+    CORE_PEER_ADDRESS=$PEER2ENDPOINT peer channel join -b $HOME/mainchannel.block
+
+# Build chaincode
+
+### change to our `package.json`
+
+
 <!--stackedit_data:
-eyJoaXN0b3J5IjpbLTEzNDU4MjA4MjgsMTI3NzgwOTQxNF19
+eyJoaXN0b3J5IjpbNjQ4Njk3NzgxLDEyNzc4MDk0MTRdfQ==
 -->
