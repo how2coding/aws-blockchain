@@ -916,12 +916,74 @@
     echo $AWS_DEFAULT_REGION
 ### .
 
-```
 
     
     aws configure
-    `
+        
+    aws s3 mb s3://$BUCKET_NAME --region $AWS_DEFAULT_REGION
+
+### .
+
+    cd
+    cat <<EOT > s3access.json
+    {
+      "Version": "2012-10-17",
+      "Statement": [
+        {
+          "Effect": "Allow",
+          "Principal": {
+            "AWS": [
+              "arn:aws:iam::$SUPPLIER_AWS_ID:root"
+            ]
+          },
+          "Action": [
+            "s3:GetObject",
+            "s3:PutObject",
+            "s3:PutObjectAcl"
+          ],
+          "Resource": [
+            "arn:aws:s3:::$BUCKET_NAME/*"
+          ]
+        }
+      ]
+    }
+    EOT
+    aws s3api put-bucket-policy --bucket $BUCKET_NAME --policy file://s3access.json
+
+### # Create member identities
+
+    WORKER1_PASSWORD=$(aws secretsmanager get-random-password --exclude-punctuation | jq -r ".RandomPassword")
+    
+    WORKER2_PASSWORD=$(aws secretsmanager get-random-password --exclude-punctuation | jq -r ".RandomPassword")
+    
+    
+    aws secretsmanager create-secret --name="HLF-MEMBER-PW-NETWORK-${NETWORKID}-ACCOUNT-${WORKER1_NAME}" --secret-string=$WORKER1_PASSWORD
+    
+    aws secretsmanager create-secret --name="HLF-MEMBER-PW-NETWORK-${NETWORKID}-ACCOUNT-${WORKER2_NAME}" --secret-string=$WORKER2_PASSWORD
+### .
+# create worker 1 cert
+
+    cd
+    fabric-ca-client register -u https://$CASERVICEENDPOINT --id.name $WORKER1_NAME --id.affiliation $MEMBER_NAME --tls.certfiles $HOME/managedblockchain-tls-chain.pem --id.type user --id.secret $WORKER1_PASSWORD --id.attrs "permissions=$WORKER1_PERMISSIONS:ecert" -M admin-msp -H $HOME
+    fabric-ca-client enroll -u https://$WORKER1_NAME:$WORKER1_PASSWORD@$CASERVICEENDPOINT --tls.certfiles $HOME/managedblockchain-tls-chain.pem -M $HOME/$WORKER1_NAME-msp -H $HOME
+    cp -r admin-msp/admincerts/ $WORKER1_NAME-msp
+
+
+### .
+
+# create worker 2 cert
+
+    fabric-ca-client register -u https://$CASERVICEENDPOINT --id.name $WORKER2_NAME --id.affiliation $MEMBER_NAME --tls.certfiles $HOME/managedblockchain-tls-chain.pem --id.type user --id.secret $WORKER2_PASSWORD --id.attrs "permissions=$WORKER2_PERMISSIONS:ecert" -M admin-msp -H $HOME
+    fabric-ca-client enroll -u https://$WORKER2_NAME:$WORKER2_PASSWORD@$CASERVICEENDPOINT --tls.certfiles $HOME/managedblockchain-tls-chain.pem -M $HOME/$WORKER2_NAME-msp -H $HOME
+    cp -r admin-msp/admincerts/ $WORKER2_NAME-msp
+
+### .
+
+# upload admin certs to S3 bucket
+export cacert=$(ls $HOME/admin-msp/cacerts/ca-*.pem)
+aws s3api put-object --bucket $BUCKET_NAME --key ${MEMBER_ABBREVIATION}cacert.pem --body $cacert --acl bucket-owner-full-control
+aws s3api put-object --bucket $BUCKET_NAME --key ${MEMBER_ABBREVIATION}admincert.pem --body $HOME/admin-msp/admincerts/cert.pem --acl bucket-owner-full-control
 
 <!--stackedit_data:
-eyJoaXN0b3J5IjpbMTMxNjQxOTA4OCwxMjc3ODA5NDE0XX0=
+eyJoaXN0b3J5IjpbMTY0NjE4MTI1LDEyNzc4MDk0MTRdfQ==
 -->
