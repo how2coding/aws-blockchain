@@ -325,6 +325,57 @@
 
     source ~/.bash_profile
 
+# Enroll Fabric admin
+
+    aws s3 cp s3://$AWS_DEFAULT_REGION.managedblockchain/etc/managedblockchain-tls-chain.pem ~/managedblockchain-tls-chain.pem
+
+### .
+
+    openssl x509 -noout -text -in ~/managedblockchain-tls-chain.pem
+
+### .
+
+    cd
+    fabric-ca-client enroll -u https://$MEMBER_ADMIN\:Admin123@$CASERVICEENDPOINT --tls.certfiles ~/managedblockchain-tls-chain.pem -M admin-msp -H $HOME
+    cp -r ~/admin-msp/signcerts ~/admin-msp/admincerts
+
+
+### .
+
+# Chaincode development environment
+
+    cd
+    nvm install 12.16.1
+    nvm use 12.16.1
+    nvm alias default 12.16.1
+    mkdir ~/environment/chaincode
+    touch ~/environment/chaincode/package.json
+    touch ~/environment/chaincode/products.js
+    touch ~/environment/chaincode/products_test.js
+
+### package.json
+
+{
+  "name": "chaincode",
+  "version": "1.0.0",
+  "scripts": {
+    "test": "NODE_PATH=lib mocha *_test.js",
+    "start": "NODE_PATH=lib node products.js"
+  },
+  "dependencies": {
+    "fabric-shim": "^2.0.0",
+    "javascript-state-machine": "^3.1.0",
+    "loglevel": "^1.6.8"
+  },
+  "devDependencies": {
+    "@theledger/fabric-mock-stub": "^2.0.3",
+    "chai": "^4.2.0",
+    "chai-as-promised": "^7.1.1",
+    "chai-datetime": "^1.6.0",
+    "moment": "^2.25.3"
+  }
+}
+
 <!--stackedit_data:
-eyJoaXN0b3J5IjpbMTI3NzgwOTQxNF19
+eyJoaXN0b3J5IjpbMTcxMDgxNzQxNywxMjc3ODA5NDE0XX0=
 -->
