@@ -1,4 +1,4 @@
-  accept-invite.yaml
+ ### accept-invite.yaml
 
        AWSTemplateFormatVersion: 2010-09-09
     Description: AMB member invitation acceptance template
@@ -1519,6 +1519,10 @@ Retrieve users' credentials and write into `src/workerNames.js` file
     nvm use lts/gallium
     npm start
 # Clean up resources in your environment
+
+    cd $HOME/environment/amb-hf-workshop-supplychain-app
+    cdk destroy
+
 <!--stackedit_data:
-eyJoaXN0b3J5IjpbNzg5NzM2ODMyLDEyNzc4MDk0MTRdfQ==
+eyJoaXN0b3J5IjpbMTIxMzM2MjcyNiwxMjc3ODA5NDE0XX0=
 -->
