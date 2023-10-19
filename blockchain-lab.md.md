@@ -1279,9 +1279,57 @@
 
 # Build chaincode
 
-### change to our `package.json`
+### change to our `package.json` file on Line 6
 
+    {
+      "name": "chaincode",
+      "version": "1.0.0",
+      "scripts": {
+        "test": "NODE_PATH=lib mocha *_test.js",
+        "start": "NODE_PATH=lib node products.js"
+      },
+      "dependencies": {
+        "fabric-shim": "^2.0.0",
+        "javascript-state-machine": "^3.1.0",
+        "loglevel": "^1.6.8"
+      },
+      "devDependencies": {
+        "@theledger/fabric-mock-stub": "^2.0.3",
+        "chai": "^4.2.0",
+        "chai-as-promised": "^7.1.1",
+        "chai-datetime": "^1.6.0",
+        "moment": "^2.25.3"
+      }
+    }
+
+
+### .
+
+    cp -r ~/environment/chaincode ~
+    cd
+    peer lifecycle chaincode package supplychaincc.tar.gz --path $HOME/chaincode --lang node --label supplychaincc_1.0
+    sudo chmod 644 supplychaincc.tar.gz
+    aws s3api put-object --bucket $BUCKET_NAME --key supplychaincc.tar.gz --body $HOME/supplychaincc.tar.gz --acl bucket-owner-full-control
+    sudo rm supplychaincc.tar.gz
+    cd
+
+# Install chaincode
+
+Both the **Retailer** and **Supplier** should run the following command in its Cloud9 terminal to install the chaincode. This step needs to be performed by all channel members.
+
+    cd
+    aws s3api get-object --bucket $BUCKET_NAME --key supplychaincc.tar.gz $HOME/supplychaincc.tar.gz
+    peer lifecycle chaincode install supplychaincc.tar.gz
+    CORE_PEER_ADDRESS=$PEER2ENDPOINT peer lifecycle chaincode install supplychaincc.tar.gz
+    export SUPPLYCHAIN_CC_PACKAGE_ID=$(peer lifecycle chaincode queryinstalled -O json | jq -r '.installed_chaincodes[] | select(.label == "supplychaincc_1.0").package_id')
+    echo $SUPPLYCHAIN_CC_PACKAGE_ID
+
+# Approve and commit the chaincode
+
+Both the **Retailer** and **Supplier** should run the approval command in its Cloud9 terminal to approve the chaincode. This step needs to be performed by all channel members.
+
+    peer lifecycle chaincode approveformyorg -o $ORDERER --channelID mainchannel --name supplychaincc --version 1.0 --sequence 1 --init-required --package-id $SUPPLYCHAIN_CC_PACKAGE_ID --tls --cafile $HOME/managedblockchain-tls-chain.pem
 
 <!--stackedit_data:
-eyJoaXN0b3J5IjpbNjQ4Njk3NzgxLDEyNzc4MDk0MTRdfQ==
+eyJoaXN0b3J5IjpbNzU5MjgyOTIwLDEyNzc4MDk0MTRdfQ==
 -->
