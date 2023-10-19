@@ -1365,7 +1365,39 @@ After each command, the product status is updated with a timestamp of when each 
 Error: endorsement failure during invoke. chaincode result: <nil>
 ```
 ### .
+# Retailer steps
+
+    CORE_PEER_MSPCONFIGPATH=$HOME/rtworker-msp peer chaincode invoke -C mainchannel -n supplychaincc -c '{"Args": ["updateProductState", "TEST1234", "receive"]}' -o $ORDERER --cafile $HOME/managedblockchain-tls-chain.pem --tls --waitForEvent
+
+### .
+
+    CORE_PEER_MSPCONFIGPATH=$HOME/rtworker-msp peer chaincode invoke -C mainchannel -n supplychaincc -c '{"Args": ["updateProductState", "TEST1234", "label"]}' -o $ORDERER --cafile $HOME/managedblockchain-tls-chain.pem --tls --waitForEvent
+
+### .
+
+    CORE_PEER_MSPCONFIGPATH=$HOME/rtseller-msp peer chaincode invoke -C mainchannel -n supplychaincc -c '{"Args": ["updateProductState", "TEST1234", "sell"]}' -o $ORDERER --cafile $HOME/managedblockchain-tls-chain.pem --tls --waitForEvent
+
+After each command, the product status is updated with a timestamp of when each operation was performed. If you see the following error at any time during these steps, try again.
+
+```text
+1
+Error: endorsement failure during invoke. chaincode result: <nil>
+```
+# Deploy CDK application
+
+    nvm install lts/gallium
+    nvm use lts/gallium
+    nvm alias default lts/gallium
+
+### .
+
+    npm install -g aws-cdk@2.55.1
+    cdk --version
+
+### .
+
+cdk bootstrap aws://$MEMBER_AWS_ID/$AWS_DEFAULT_REGION
 
 <!--stackedit_data:
-eyJoaXN0b3J5IjpbLTQxNTM4ODI2MywxMjc3ODA5NDE0XX0=
+eyJoaXN0b3J5IjpbLTU5MTg1OTk4NSwxMjc3ODA5NDE0XX0=
 -->
