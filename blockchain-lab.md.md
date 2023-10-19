@@ -911,6 +911,17 @@
         cd ~/environment/chaincode
         npm test
 
+### # Create sharing policy
+
+    echo $AWS_DEFAULT_REGION
+### .
+
+```
+
+    
+    aws configure
+    `
+
 <!--stackedit_data:
-eyJoaXN0b3J5IjpbLTEyOTMyMzU1NDcsMTI3NzgwOTQxNF19
+eyJoaXN0b3J5IjpbMTMxNjQxOTA4OCwxMjc3ODA5NDE0XX0=
 -->
