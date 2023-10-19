@@ -631,11 +631,286 @@
       shim.start(new ProductsChaincode());
     }
 
+### products_test.js
 
-### .
-
-    mv node_modules/ lib
+    /*
+    # Copyright 2022 Amazon.com, Inc. or its affiliates. All Rights Reserved.
+    # 
+    # Licensed under the Apache License, Version 2.0 (the "License").
+    # You may not use this file except in compliance with the License.
+    # A copy of the License is located at
+    # 
+    #     http://www.apache.org/licenses/LICENSE-2.0
+    # 
+    # or in the "license" file accompanying this file. This file is distributed 
+    # on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either 
+    # express or implied. See the License for the specific language governing 
+    # permissions and limitations under the License.
+    #
+    */
+    'use strict';
+    
+    const chai = require('chai');
+    const chaiAsPromised = require('chai-as-promised');
+    const chaiDateTime = require('chai-datetime');
+    chai.use(chaiAsPromised);
+    chai.use(chaiDateTime);
+    const expect = chai.expect;
+    const moment = require('moment');
+    
+    const ProductsChaincode = require('./products');
+    const MockStub = require('@theledger/fabric-mock-stub');
+    const { ChaincodeMockStub } = MockStub;
+    const log = require('loglevel').getLogger('products');
+    const log_level = process.env['LOG_LEVEL'] || 'warn';
+    log.setLevel(log_level.toUpperCase());
+    
+    
+    ////////////////////////////////////////////////////////////////////////////
+    // suppressLogging
+    // helper function to turn off logging during tests
+    // that are supposed to produce errors
+    ////////////////////////////////////////////////////////////////////////////
+    
+    const suppressLogging = async (func) => {
+      const previousLevel = log.getLevel();
+      log.setLevel(log.levels.SILENT);
+      await func();
+      log.setLevel(previousLevel);
+    };
+    
+    
+    ////////////////////////////////////////////////////////////////////////////
+    // spCIDMock
+    // Mock used to imitate the behavior of the ClientIdentity object.
+    ////////////////////////////////////////////////////////////////////////////
+    
+    class spCIDMock {
+      constructor(stub) {
+        this._attributes = {
+          'hf.Affiliation': 'Supplier',
+          'permissions': 'manufacture'
+        };
+      }
+      getAttributeValue(key) { return this._attributes[key]; }
+      assertAttributeValue(key, value) { return this._attributes[key] === value; }
+    }
+    
+    
+    describe('Products', () => {
+      let chaincode, stub;
+    
+      beforeEach(() => {
+        chaincode = new ProductsChaincode();
+        stub = new ChaincodeMockStub("ProductsMockStub", chaincode);
+      });
+    
+      describe('init', () => {
+        it("should succeed", async () => {
+          const response = await stub.mockInit('tx1', []);
+          expect(response.status).to.eql(200);
+        });
+    
+        it("should initialize the ProductIDs list", async () => {
+          let response = await stub.mockInit('tx1', []);
+          response = await chaincode.query(stub, ['query', 'productIDs']);
+          expect(response.toString()).to.eql('[]');
+        });
+    
+        it("should expect no arguments", async () => {
+          const response = await stub.mockInit('tx1', ['fn', 'invalid']);
+          expect(response.status).to.eql(500);
+          expect(response.message).to.eql('Init() does not expect any arguments');
+        });
+      });
+    
+      describe('invoke', () => {
+        it('should reject unrecognized commands', async () => {
+          const response = await stub.mockInvoke('tx1', ['blah']);
+          expect(response.status).to.eql(500);
+          expect(response.message).to.eql('Unrecognized method blah in invoke');
+        });
+    
+        it('should reject invocations with no arguments', async () => {
+          const response = await stub.mockInvoke('tx1', []);
+          expect(response.status).to.eql(500);
+          expect(response.message).to.eql('Missing method parameter in invoke');
+        });
+      });
+    
+      describe('query', () => {
+        beforeEach(async () => {
+          chaincode = new ProductsChaincode(spCIDMock);
+          stub = new ChaincodeMockStub("ProductsMockStub", chaincode);
+          await stub.mockInit('tx1', []);
+        });
+    
+        it('should throw an error if called with too many arguments', async () => {
+          await expect(chaincode.query(stub, ['query', 'product_1', 'product_2']))
+            .to.eventually.be.rejected.and.match(/Incorrect number of arguments/m);
+        });
+    
+        it('should throw an error if a key is not found', async () => {
+          await expect(chaincode.query(stub, ['query', 'product_1']))
+            .to.eventually.be.rejected.and.match(/No value for key/m);
+        });
+    
+        it('should return an empty array for productIDs', async () => {
+          const response = await chaincode.query(stub, ['query', 'productIDs']);
+          expect(response.toString()).to.eql('[]');
+        });
+      });
+    
+      describe('createProduct', () => {
+        beforeEach(async () => {
+          chaincode = new ProductsChaincode(spCIDMock);
+          stub = new ChaincodeMockStub("ProductsMockStub", chaincode);
+          await stub.mockInit('tx1', []);
+        });
+    
+        it("should only accept one argument", async () => {
+          suppressLogging(async () => {
+            await expect(stub.mockInvoke('tx2', ['createProduct', '1', 'extra']))
+              .to.eventually.have.property('message')
+              .and.match(/createProduct expects one argument/m);
+          });
+        });
+    
+        it("should not overwrite an existing product with the same ID", async () => {
+          await stub.mockInvoke('tx2', ['createProduct', '1']);
+          suppressLogging(async () => {
+            await expect(stub.mockInvoke('tx3', ['createProduct', '1']))
+              .to.eventually.have.property('message')
+              .and.match(/Product with same ID already exists/m);
+          });
+        });
+    
+        it("should set new products' state to 'manufactured'", async () => {
+          let response = await stub.mockInvoke('tx2', ['createProduct', '1']);
+          response = await chaincode.query(stub, ['query', 'product_1']);
+          expect(JSON.parse(response.toString())).to.have.property('state', 'manufactured');
+        });
+    
+        it('should add an element to the list of productIDs', async () => {
+          await stub.mockInit('tx2', []);
+          let response = await stub.mockInvoke('tx3', ['createProduct', '1']);
+          response = await chaincode.query(stub, ['query', 'productIDs']);
+          expect(response.toString()).to.equal('["product_1"]');
+        });
+    
+        it('should not allow clients without the appropriate permissions', async () => {
+          const productID = '1';
+          chaincode = new ProductsChaincode();
+          stub = new ChaincodeMockStub("ProductsMockStub", chaincode);
+          await stub.mockInit('tx1', []);
+          async () => {
+            await expect(stub.mockInvoke('tx2', ['createProduct', productID]))
+              .to.eventually.have.property('message')
+              .and.match(/affiliation Supplier and permission manufacture required/m);
+          };
+        });
+      });
+    
+      describe('updateProductState', () => {
+        const productID = '1';
+        let chaincode, stub;
+    
+        beforeEach(async () => {
+          chaincode = new ProductsChaincode();
+          stub = new ChaincodeMockStub("ProductsMockStub", chaincode);
+        });
+    
+        it('should only accept two arguments', async () => {
+          chaincode = new ProductsChaincode(spCIDMock);
+          stub = new ChaincodeMockStub("ProductsMockStub", chaincode);
+          await stub.mockInit('tx1', []);
+          const args = [
+            'updateProductState',
+            productID,
+            'arrivedAtSupplier',
+            'invalid'
+          ];
+          suppressLogging(async () => {
+            await expect(stub.mockInvoke('tx3', args))
+              .to.eventually.have.property('message')
+              .and.match(/updateProductState expects two arguments/m);
+          });
+        });
+    
+        it('should not allow invalid state transitions', async () => {
+          class cidMock {
+            constructor(stub) {
+              this._attributes = {
+                'hf.Affiliation': 'Supplier',
+                'permissions': 'manufacture_ship'
+    
+              };
+            }
+            getAttributeValue(key) { return this._attributes[key]; }
+            assertAttributeValue(key, value) { return this._attributes[key] === value; }
+          }
+          chaincode = new ProductsChaincode(cidMock);
+          stub = new ChaincodeMockStub("ProductsMockStub", chaincode);
+          await stub.mockInit('tx1', []);
+          const args = ['updateProductState', productID, 'ship'];
+          await stub.mockInvoke('tx2', ['createProduct', productID]);
+          suppressLogging(async () => {
+            let result = await stub.mockInvoke('tx3', args);
+            expect(result.message.toString()).to.eql('transition is invalid in current state');
+          });
+        });
+    
+        it('should store a history of timestamped state transitions', async () => {
+          class cidMock {
+            constructor(stub) {
+              this._attributes = {
+                'hf.Affiliation': 'Supplier',
+                'permissions': 'manufacture_inspect'
+              };
+            }
+            getAttributeValue(key) { return this._attributes[key]; }
+            assertAttributeValue(key, value) { return this._attributes[key] === value; }
+          }
+          chaincode = new ProductsChaincode(cidMock);
+          stub = new ChaincodeMockStub("ProductsMockStub", chaincode);
+          await stub.mockInit('tx1', []);
+          await stub.mockInvoke('tx2', ['createProduct', productID]);
+          await stub.mockInvoke('tx3', ['updateProductState', productID, 'inspect']);
+          const response = await chaincode.query(stub, ['query', 'product_1']);
+          const expectedTime = new Date();
+          const parsedResponse = JSON.parse(response.toString());
+          expect(parsedResponse).to.have.property('history');
+          const time = moment(parsedResponse.history.inspected).toDate();
+          expect(time).to.be.closeToTime(expectedTime, 1);
+        });
+    
+        it('should not allow clients without the appropriate permissions', async () => {
+          chaincode = new ProductsChaincode(spCIDMock);
+          stub = new ChaincodeMockStub("ProductsMockStub", chaincode);
+          await stub.mockInit('tx1', []);
+          await stub.mockInvoke('tx2', ['createProduct', productID]);
+          const args = ['updateProductState', productID, 'inspect'];
+          suppressLogging(async () => {
+            let result = await stub.mockInvoke('tx3', args);
+            expect(result.message.toString()).to.match(/affiliation Supplier and permission inspect required/);
+          });
+        });
+      });
+    });
+    
+    
+    
+    
+    ### .
+    
+        mv node_modules/ lib
+    
+    ### .
+    
+        nvm use 12.16.1
+        cd ~/environment/chaincode
+        npm test
 
 <!--stackedit_data:
-eyJoaXN0b3J5IjpbNTg2NjU0MTg1LDEyNzc4MDk0MTRdfQ==
+eyJoaXN0b3J5IjpbLTEyOTMyMzU1NDcsMTI3NzgwOTQxNF19
 -->
