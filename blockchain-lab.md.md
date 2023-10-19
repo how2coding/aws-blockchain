@@ -1479,7 +1479,46 @@ Error: endorsement failure during invoke. chaincode result: <nil>
 
     cd $HOME/environment/amb-hf-workshop-supplychain-app/frontend
     npm ci
+# Generate configurations
+Retrieve Cognito and AppSync information and write into `src/aws-exports.js` file
 
+    export POOLID=$(aws cognito-idp list-user-pools --max-results 60 | jq -r '.UserPools | .[] | select(.Name == "ambSupplyChainUsers") | .Id')
+    export CLIENTID=$(aws cognito-idp list-user-pool-clients --user-pool-id $POOLID | jq -r .UserPoolClients[0].ClientId)
+    export GRAPHQL_ENDPOINT=$(aws appsync list-graphql-apis | jq -r '.graphqlApis | .[] | select(.name == "AMBSupplyChainAPI" and .authenticationType == "AMAZON_COGNITO_USER_POOLS").uris.GRAPHQL')
+    
+    cat <<EOT > $HOME/environment/amb-hf-workshop-supplychain-app/frontend/src/aws-exports.js
+    const awsconfig = {
+      aws_project_region: "$AWS_DEFAULT_REGION",
+      aws_cognito_region: "$AWS_DEFAULT_REGION",
+      aws_user_pools_id: "$POOLID",
+      aws_user_pools_web_client_id: "$CLIENTID",
+      aws_appsync_graphqlEndpoint: "$GRAPHQL_ENDPOINT",
+      aws_appsync_region: "$AWS_DEFAULT_REGION",
+      aws_appsync_authenticationType: "AMAZON_COGNITO_USER_POOLS",
+      aws_mandatory_sign_in: true
+    };
+    export default awsconfig;
+    EOT
+Retrieve users' credentials and write into `src/workerNames.js` file
+
+    export WORKER1_PASSWORD=$(aws secretsmanager get-secret-value --secret-id="HLF-MEMBER-PW-NETWORK-${NETWORKID}-ACCOUNT-${WORKER1_NAME}" | jq -r '.SecretString')
+    export WORKER2_PASSWORD=$(aws secretsmanager get-secret-value --secret-id="HLF-MEMBER-PW-NETWORK-${NETWORKID}-ACCOUNT-${WORKER2_NAME}" | jq -r '.SecretString')
+    
+    cat <<EOT > $HOME/environment/amb-hf-workshop-supplychain-app/frontend/src/workerNames.js
+    const workerNames = {
+      "worker1": "$WORKER1_NAME",
+      "worker2": "$WORKER2_NAME",
+      "worker1Password": "$WORKER1_PASSWORD",
+      "worker2Password": "$WORKER2_PASSWORD"
+    };
+    export default workerNames;
+    EOT
+# Launch application
+
+    cd $HOME/environment/amb-hf-workshop-supplychain-app/frontend
+    nvm use lts/gallium
+    npm start
+# Clean up resources in your environment
 <!--stackedit_data:
-eyJoaXN0b3J5IjpbNDcxMDUyNDk0LDEyNzc4MDk0MTRdfQ==
+eyJoaXN0b3J5IjpbNzg5NzM2ODMyLDEyNzc4MDk0MTRdfQ==
 -->
