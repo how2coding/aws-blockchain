@@ -1442,7 +1442,44 @@ Error: endorsement failure during invoke. chaincode result: <nil>
 # Store user secrets
 
 
+    cd $HOME/environment/amb-hf-workshop-supplychain-app
+    ./scripts/insertSecretValues.sh
+# Create Cognito users
+
+    cd $HOME/environment/amb-hf-workshop-supplychain-app
+    ./scripts/createUsers.sh
+
+# Run test queries
+
+    # get password for worker 1 (rtworker or spworker)
+    aws secretsmanager get-secret-value --secret-id="HLF-MEMBER-PW-NETWORK-${NETWORKID}-ACCOUNT-${WORKER1_NAME}" | jq -r ".SecretString"
+    
+    # get password for worker 2 (rtseller or spinspector)
+    aws secretsmanager get-secret-value --secret-id="HLF-MEMBER-PW-NETWORK-${NETWORKID}-ACCOUNT-${WORKER2_NAME}" | jq -r ".SecretString"
+
+
+### .
+
+    query GetProduct {
+      product(id: "TEST1234") {
+        id
+        state
+        history {
+          manufactured
+          inspected
+          shipped
+          labeled
+          stocked
+          sold
+        }
+      }
+    }
+
+# Install dependencies
+
+    cd $HOME/environment/amb-hf-workshop-supplychain-app/frontend
+    npm ci
 
 <!--stackedit_data:
-eyJoaXN0b3J5IjpbLTM5NjE2NDgzLDEyNzc4MDk0MTRdfQ==
+eyJoaXN0b3J5IjpbNDcxMDUyNDk0LDEyNzc4MDk0MTRdfQ==
 -->
