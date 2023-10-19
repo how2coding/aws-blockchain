@@ -355,27 +355,287 @@
 
 ### package.json
 
-{
-  "name": "chaincode",
-  "version": "1.0.0",
-  "scripts": {
-    "test": "NODE_PATH=lib mocha *_test.js",
-    "start": "NODE_PATH=lib node products.js"
-  },
-  "dependencies": {
-    "fabric-shim": "^2.0.0",
-    "javascript-state-machine": "^3.1.0",
-    "loglevel": "^1.6.8"
-  },
-  "devDependencies": {
-    "@theledger/fabric-mock-stub": "^2.0.3",
-    "chai": "^4.2.0",
-    "chai-as-promised": "^7.1.1",
-    "chai-datetime": "^1.6.0",
-    "moment": "^2.25.3"
-  }
-}
+    {
+      "name": "chaincode",
+      "version": "1.0.0",
+      "scripts": {
+        "test": "NODE_PATH=lib mocha *_test.js",
+        "start": "NODE_PATH=lib node products.js"
+      },
+      "dependencies": {
+        "fabric-shim": "^2.0.0",
+        "javascript-state-machine": "^3.1.0",
+        "loglevel": "^1.6.8"
+      },
+      "devDependencies": {
+        "@theledger/fabric-mock-stub": "^2.0.3",
+        "chai": "^4.2.0",
+        "chai-as-promised": "^7.1.1",
+        "chai-datetime": "^1.6.0",
+        "moment": "^2.25.3"
+      }
+    }
+
+
+### .
+
+    npm install mocha@7.2.0 -g
+    cd ~/environment/chaincode && npm i
+
+### # Write chaincode
+
+### products.js
+
+    /*
+    # Copyright 2022 Amazon.com, Inc. or its affiliates. All Rights Reserved.
+    # 
+    # Licensed under the Apache License, Version 2.0 (the "License").
+    # You may not use this file except in compliance with the License.
+    # A copy of the License is located at
+    # 
+    #     http://www.apache.org/licenses/LICENSE-2.0
+    # 
+    # or in the "license" file accompanying this file. This file is distributed 
+    # on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either 
+    # express or implied. See the License for the specific language governing 
+    # permissions and limitations under the License.
+    #
+    */
+    'use strict';
+    
+    const shim = require('fabric-shim');
+    const log = require('loglevel').getLogger('products');
+    log.setLevel('trace');
+    const StateMachine = require('javascript-state-machine');
+    
+    
+    ////////////////////////////////////////////////////////////////////////////
+    // FSM (Finite State Machine)
+    // Used to ensure state transitions are valid
+    ////////////////////////////////////////////////////////////////////////////
+    
+    const FSM = new StateMachine.factory({
+      init: 'manufactured',
+      transitions: [
+        { name: 'inspect', from: 'manufactured', to: 'inspected' }, // supplier
+        { name: 'ship', from: 'inspected', to: 'shipped' },         // supplier
+        { name: 'receive', from: 'shipped', to: 'stocked' },        // retailer
+        { name: 'label', from: 'stocked', to: 'labeled' },          // retailer
+        { name: 'sell', from: 'labeled', to: 'sold' },              // retailer
+        { name: 'goto', from: '*', to: function(s) { return s } }
+      ]
+    });
+    
+    ////////////////////////////////////////////////////////////////////////////
+    // ProductsChaincode
+    // Used to track all products in the supply chain
+    ////////////////////////////////////////////////////////////////////////////
+    
+    const ProductsChaincode = class {
+      constructor(cid = shim.ClientIdentity) {
+        this.clientIdentity = cid;
+      }
+    
+      ////////////////////////////////////////////////////////////////////////////
+      // requireAffiliationAndPermissions
+      // Checks that invoke() caller belongs to the specified blockchain member
+      // and has the specified permission. Throws an exception if not.
+      ////////////////////////////////////////////////////////////////////////////
+    
+      requireAffiliationAndPermissions(stub, affiliation, permission) {
+        const cid = new this.clientIdentity(stub);
+        let permissions = cid.getAttributeValue('permissions') || 'default';
+        permissions = permissions.split('_');
+        const hasBoth =
+          cid.assertAttributeValue('hf.Affiliation', affiliation) &&
+          permissions.includes(permission);
+        if (!hasBoth) {
+          const msg = `Unauthorized access: affiliation ${affiliation}` +
+            ` and permission ${permission} required`;
+          throw new Error(msg);
+        }
+      }
+    
+      ////////////////////////////////////////////////////////////////////////////
+      // assertCanPerformOperation
+      // Determines which membership affiliations are required for which
+      // operations. Called by other methods. Calls
+      // requireAffiliationAndPermissions as a subroutine.
+      ////////////////////////////////////////////////////////////////////////////
+    
+      assertCanPerformTransition(stub, transition) {
+        let requiredAffiliation = 'undefined';
+        switch (transition) {
+          case 'manufacture':
+          case 'inspect':
+          case 'ship': requiredAffiliation = 'Supplier'; break;
+          case 'receive':
+          case 'label':
+          case 'sell': requiredAffiliation = 'Retailer';
+        }
+        this.requireAffiliationAndPermissions(stub, requiredAffiliation, transition);
+      }
+    
+      ////////////////////////////////////////////////////////////////////////////
+      // Initialize the chaincode
+      ////////////////////////////////////////////////////////////////////////////
+    
+      async Init(stub) {
+        const ret = stub.getFunctionAndParameters();
+        if (ret.params.length > 0) {
+          return shim.error('Init() does not expect any arguments');
+        }
+        // initialize list of all product IDs so that they can be iterated over
+        await stub.putState('productIDs', Buffer.from('[]'));
+        return shim.success();
+      }
+    
+      ////////////////////////////////////////////////////////////////////////////
+      // Invoke chaincode and dispatch the appropriate method
+      ////////////////////////////////////////////////////////////////////////////
+    
+      async Invoke(stub) {
+        const ret = stub.getFunctionAndParameters();
+        log.debug(ret);
+    
+        if (!ret.fcn) {
+          return shim.error('Missing method parameter in invoke');
+        }
+    
+        let method = this[ret.fcn];
+        let returnval;
+    
+        if (!method) {
+          return shim.error(`Unrecognized method ${ret.fcn} in invoke`);
+        }
+        try {
+          let payload = await method(this, stub, ret.params);
+          log.debug(`Payload from call to ${ret.fcn} was ${JSON.stringify(payload)}.`);
+          returnval = shim.success(Buffer.from(payload));
+        } catch (err) {
+          log.error(`Error in Invoke ${ret.fcn}: ${err.message}`);
+          returnval = shim.error(Buffer.from(err.message));
+        }
+        log.debug(`exiting Invoke`)
+        return returnval;
+      }
+    
+      ////////////////////////////////////////////////////////////////////////////
+      // createProduct
+      // Add a newly-manufactured product to the blockchain
+      ////////////////////////////////////////////////////////////////////////////
+    
+      async createProduct(self, stub, args) {
+        log.debug(`in createProduct(self, stub, ${JSON.stringify(args)})...`);
+        if (args.length !== 1) {
+          throw new Error('createProduct expects one argument');
+        }
+    
+        self.assertCanPerformTransition(stub, 'manufacture');
+        const now = new Date();
+        const payload = {
+          "state": "manufactured",
+          "history": {
+            "manufactured": now.toISOString()
+          }
+        };
+        const strPayload = JSON.stringify(payload);
+        const productId = args[0];
+        const key = `product_${productId}`;
+        let productStateBytes = await stub.getState(key);
+    
+        if (!productStateBytes || productStateBytes.length === 0) {
+          log.debug(`Calling stub.putState(${key}, Buffer.from(JSON.stringify(${strPayload})))...`);
+          await stub.putState(key, Buffer.from(strPayload));
+        } else {
+          throw new Error('Product with same ID already exists.');
+        }
+    
+        // add productID to list of product IDs
+        log.debug(`Retrieving product ID list...`);
+        let arr = await stub.getState('productIDs');
+        log.debug(`product ID list, ${arr}`);
+        let productIDs = JSON.parse(arr.toString());
+        log.debug(`product ID list JSON string, ${productIDs}`);
+        productIDs = [...productIDs, key].sort();
+        log.debug(`Storing updated product ID list...`);
+        await stub.putState('productIDs', Buffer.from(JSON.stringify(productIDs)));
+    
+        log.debug(`exiting createProduct(self, stub, ${JSON.stringify(args)})...`);
+        return strPayload;
+      }
+    
+      ////////////////////////////////////////////////////////////////////////////
+      // updateProductState
+      // Update an existing product as it moves through the supply chain
+      ////////////////////////////////////////////////////////////////////////////
+    
+      async updateProductState(self, stub, args) {
+        if (args.length !== 2) {
+          throw new Error('updateProductState expects two arguments');
+        }
+        const productId = args[0];
+        const transition = args[1];
+        self.assertCanPerformTransition(stub, transition);
+        const key = `product_${productId}`;
+        const productDataBytes = await stub.getState(key);
+        const productData = JSON.parse(productDataBytes.toString());
+        const product = new FSM();
+        product.goto(productData.state);
+        product[transition]();
+        productData.state = product.state;
+        const now = new Date();
+        productData.history = productData.history || {};
+        productData.history[product.state] = now.toISOString();
+        const stringProductData = JSON.stringify(productData);
+        await stub.putState(key, Buffer.from(stringProductData));
+        return stringProductData;
+      }
+    
+    
+      ////////////////////////////////////////////////////////////////////////////
+      // query blockchain state
+      ////////////////////////////////////////////////////////////////////////////
+    
+      async query() {
+        const params = Array.from(arguments);
+        let ctx, stub, args, keyIndex = 0, expectedArgLength = 1;
+        if (params.length === 2) { // we're being called in unit tests
+          [stub, args] = params;
+          keyIndex = 1;
+          expectedArgLength = 2;
+        } else {                   // we're being called in a live environment
+          [ctx, stub, args] = params;
+        }
+        if (args.length !== expectedArgLength) {
+          throw new Error(`Incorrect number of arguments. Arguments contains: ${JSON.stringify(args)}`);
+        }
+    
+        let key = args[keyIndex];
+    
+        // Get the state from the ledger
+        let resultBytes = await stub.getState(key);
+        if (!resultBytes) {
+          const message = `No value for key ${key}`;
+          throw new Error(message);
+        }
+    
+        log.debug('Query Response:', resultBytes.toString());
+        return resultBytes;
+      }
+    };
+    
+    module.exports = ProductsChaincode;
+    
+    if (require.main === module) {
+      shim.start(new ProductsChaincode());
+    }
+
+
+### .
+
+    mv node_modules/ lib
 
 <!--stackedit_data:
-eyJoaXN0b3J5IjpbMTcxMDgxNzQxNywxMjc3ODA5NDE0XX0=
+eyJoaXN0b3J5IjpbNTg2NjU0MTg1LDEyNzc4MDk0MTRdfQ==
 -->
